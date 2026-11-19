@@ -270,6 +270,54 @@ select:hover, select:focus {
   color: var(--text-muted);
 }
 
+/* Sector Splits */
+.sector-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.sector-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.sector-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-dim);
+  display: block;
+}
+
+.sector-time {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-main);
+  font-family: monospace;
+}
+
+.sector-box.sector-pb {
+  border-color: var(--accent-green);
+  background: rgba(0, 255, 102, 0.08);
+}
+
+.sector-box.sector-pb .sector-time {
+  color: var(--accent-green);
+}
+
+.sector-box.sector-purple {
+  border-color: #d946ef;
+  background: rgba(217, 70, 239, 0.08);
+}
+
+.sector-box.sector-purple .sector-time {
+  color: #f0abfc;
+}
+
 /* Speed Bar */
 .speed-bar-container {
   height: 6px;
