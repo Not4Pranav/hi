@@ -105,6 +105,8 @@ class ApexProApp {
     document.getElementById('ui-track-length').innerText = `${Math.round(this.track.length)}m`;
     document.getElementById('ui-theoretical-lap').innerText = `${this.racingLineData.theoreticalLapTime.toFixed(3)}s`;
     document.getElementById('ui-apex-count').innerText = `${this.racingLineData.apexCount} corners`;
+    const intelTheo = document.getElementById('ui-intel-theoretical');
+    if (intelTheo) intelTheo.innerText = `${this.racingLineData.theoreticalLapTime.toFixed(3)}s`;
   }
 
   resetSimulation() {
@@ -120,6 +122,14 @@ class ApexProApp {
     this.sectorTimes = [null, null, null];
     this.lastTrackIndex = 0;
     this.hasCrossedStart = false;
+
+    // Reset sector UI
+    for (let s = 1; s <= 3; s++) {
+      const el = document.getElementById(`ui-s${s}-time`);
+      if (el) el.innerText = '--.---s';
+      const box = document.getElementById(`ui-sector-box-${s}`);
+      if (box) box.className = 'sector-box';
+    }
   }
 
   setupBookmarklet() {
@@ -166,6 +176,8 @@ class ApexProApp {
       this.ghostAutopilot.setData(this.racingLineData);
       this.resetSimulation();
       document.getElementById('ui-theoretical-lap').innerText = `${this.racingLineData.theoreticalLapTime.toFixed(3)}s`;
+      const intelTheo = document.getElementById('ui-intel-theoretical');
+      if (intelTheo) intelTheo.innerText = `${this.racingLineData.theoreticalLapTime.toFixed(3)}s`;
     });
 
     // Mode buttons
@@ -201,12 +213,22 @@ class ApexProApp {
       this.showApexMarkers = e.target.checked;
     });
 
+    // Copy bookmarklet button (Mobile / iOS)
+    document.getElementById('btn-copy-bookmarklet')?.addEventListener('click', () => {
+      const code = generateBookmarklet();
+      navigator.clipboard.writeText(code).then(() => {
+        const btn = document.getElementById('btn-copy-bookmarklet');
+        btn.innerText = 'Copied Code to Clipboard!';
+        setTimeout(() => { btn.innerText = '📋 Copy Bookmarklet (Mobile / iOS)'; }, 2000);
+      });
+    });
+
     // Copy userscript button
     document.getElementById('btn-copy-userscript')?.addEventListener('click', () => {
       navigator.clipboard.writeText(USERSCRIPT_CODE).then(() => {
         const btn = document.getElementById('btn-copy-userscript');
         btn.innerText = 'Copied to Clipboard!';
-        setTimeout(() => { btn.innerText = 'Copy Tampermonkey Script'; }, 2000);
+        setTimeout(() => { btn.innerText = '📋 Copy Tampermonkey Script'; }, 2000);
       });
     });
 
