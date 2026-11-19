@@ -469,17 +469,25 @@ select:hover, select:focus {
   justify-content: space-between;
 }
 
+.bookmarklet-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .bookmarklet-btn {
   display: inline-block;
   background: var(--accent-cyan);
   color: #000;
   font-weight: 800;
   font-size: 13px;
-  padding: 10px 20px;
+  padding: 10px 18px;
   border-radius: 6px;
   text-decoration: none;
   box-shadow: 0 0 16px rgba(0, 240, 255, 0.35);
   cursor: grab;
+  white-space: nowrap;
 }
 
 .bookmarklet-btn:active {
@@ -538,5 +546,45 @@ select:hover, select:focus {
   }
   .canvas-card {
     height: 480px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+  .header-controls {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .main-container {
+    padding: 12px;
+    gap: 14px;
+  }
+  .canvas-card {
+    height: 400px;
+  }
+  .canvas-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+    top: 10px;
+    left: 10px;
+  }
+  .canvas-toggles {
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 11px;
+    padding: 6px 10px;
+    bottom: 10px;
+    left: 10px;
+  }
+  .btn {
+    padding: 5px 10px;
+    font-size: 11px;
   }
 }
