@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Race2Win Apex Pro — The Ultimate Perfect Lap Suite</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="logo-group">
+      <span class="logo-badge">R2W</span>
+      <h1 class="app-title">APEX PRO <span>// PERFECT LAP SUITE</span></h1>
+    </div>
+
+    <div class="header-controls">
+      <div class="select-group">
+        <label for="track-select">TRACK:</label>
+        <select id="track-select">
+          <option value="solana-circuit" selected>Solana Circuit (Meadow)</option>
+          <option value="mirrormere">Mirrormere (Lakeside)</option>
+          <option value="bluff-point-gp">Bluff Point GP (Steppe)</option>
+          <option value="islemont-circuit">Islemont Circuit (Lakeside)</option>
+          <option value="kestrel-loop">Kestrel Loop (Highland)</option>
+        </select>
+      </div>
+
+      <div class="select-group">
+        <label for="car-select">CAR:</label>
+        <select id="car-select">
+          <option value="formula-a" selected>Formula A (Daily Race)</option>
+          <option value="go-kart">Go-Kart (Agile)</option>
+          <option value="gt-class-a">GT Class A (Touring)</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <main class="main-container">
+    <section class="sim-grid">
+      <!-- 2D Track Simulation Canvas -->
+      <div class="canvas-card">
+        <div class="canvas-toolbar">
+          <button class="btn mode-btn active" data-mode="bot">🤖 Perfect Lap Bot</button>
+          <button class="btn mode-btn" data-mode="manual">🎮 Manual Drive</button>
+          <button class="btn mode-btn" data-mode="versus">⚡ Ghost Versus</button>
+          <button class="btn" id="btn-cam-toggle">Camera: Follow Car</button>
+          <button class="btn" id="btn-reset">↺ Reset</button>
+        </div>
+
+        <div class="canvas-wrapper">
+          <canvas id="sim-canvas"></canvas>
+        </div>
+
+        <div class="canvas-toggles">
+          <label><input type="checkbox" id="chk-racing-line" checked> Optimal Racing Line</label>
+          <label><input type="checkbox" id="chk-braking-zones" checked> Braking Zones</label>
+          <label><input type="checkbox" id="chk-apex-markers" checked> Apex Targets</label>
+        </div>
+      </div>
+
+      <!-- F1 Telemetry Sidebar -->
+      <aside class="telemetry-card">
+        <div class="panel-header">
+          <span>Live Telemetry</span>
+          <span style="color:var(--accent-green);">60 Hz Sync</span>
+        </div>
+
+        <!-- Lap Timing -->
+        <div class="metric-grid">
+          <div class="metric-box">
+            <span class="metric-label">Current Lap</span>
+            <span class="metric-value" id="ui-current-lap">0.000s</span>
+            <span class="metric-sub" id="ui-lap-delta">+0.000s vs Best</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Best Lap</span>
+            <span class="metric-value" id="ui-best-lap" style="color:var(--accent-green);">--.---s</span>
+            <span class="metric-sub" id="ui-theoretical-lap">Theo: --.---s</span>
+          </div>
+        </div>
+
+        <!-- Speed & Scrub -->
+        <div class="metric-grid">
+          <div class="metric-box">
+            <span class="metric-label">Vehicle Speed</span>
+            <span class="metric-value" id="ui-speed-kmh">0</span>
+            <span class="metric-sub" id="ui-speed-ms">0.0 m/s</span>
+            <div class="speed-bar-container">
+              <div class="speed-bar-fill" id="ui-speed-bar"></div>
+            </div>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Tire Scrub Loss</span>
+            <span class="metric-value" id="ui-scrub-pct" style="color:var(--accent-green);">0%</span>
+            <span class="metric-sub" id="ui-lateral-g">0.00G Lat</span>
+          </div>
+        </div>
+
+        <!-- Boost Status -->
+        <div class="boost-container">
+          <div class="boost-header">
+            <span style="color:var(--accent-cyan);">KERS BOOST CHARGE</span>
+            <span id="ui-boost-pct">100%</span>
+          </div>
+          <div class="boost-bar-track">
+            <div class="boost-bar-fill" id="ui-boost-bar"></div>
+          </div>
+        </div>
+
+        <!-- Friction Circle (G-G Diagram) -->
+        <div class="diagram-container">
+          <div class="panel-header" style="width:100%; margin-bottom:6px;">
+            <span>Friction Circle (Kammscher Kreis)</span>
+          </div>
+          <canvas id="gg-canvas" width="200" height="150"></canvas>
+        </div>
+
+        <!-- Telemetry Rolling Graph -->
+        <div class="telemetry-graph-box">
+          <div class="panel-header" style="margin-bottom:6px;">
+            <span>Rolling Trace (Speed / Throttle / Brake)</span>
+          </div>
+          <canvas id="telemetry-canvas" width="340" height="110"></canvas>
+        </div>
+      </aside>
+    </section>
+
+    <!-- Information Tabs & Userscript Installer -->
+    <section class="tabs-card">
+      <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="tab-userscript">⚡ In-Game Assistant & Userscript</button>
+        <button class="tab-btn" data-tab="tab-track-intel">🗺️ Track Intel & Boost Strategy</button>
+        <button class="tab-btn" data-tab="tab-physics-secrets">🔬 Reverse Engineering & Physics Guide</button>
+      </nav>
+
+      <!-- Tab 1: Userscript & Bookmarklet -->
+      <div class="tab-pane active" id="tab-userscript">
+        <div class="bookmarklet-box">
+          <div>
+            <h3 style="color:var(--accent-cyan); font-size:16px; margin-bottom:4px;">1-Click Browser Bookmarklet</h3>
+            <p style="color:var(--text-muted); font-size:13px;">
+              Drag the button below to your Bookmarks Bar. When you are on <strong style="color:#fff;">race2win.xyz</strong>, click it once to inject the Apex Pro HUD & Autopilot directly into your game!
+            </p>
+          </div>
+          <a id="bookmarklet-link" class="bookmarklet-btn" href="#">🏎️ Race2Win Apex Pro</a>
+        </div>
+
+        <div class="info-card" style="margin-bottom:16px;">
+          <h3>Tampermonkey / Violentmonkey Userscript</h3>
+          <p>
+            For permanent auto-loading on every race, install this userscript into Tampermonkey or Violentmonkey. It runs automatically, monitors tire scrub, removes the keyboard throttle-cut penalty, and optionally steers the optimal racing line with <span class="formula-tag">Ctrl + Shift + A</span>.
+          </p>
+          <div style="margin-top:10px;">
+            <button class="btn btn-primary" id="btn-copy-userscript">📋 Copy Tampermonkey Script</button>
+          </div>
+          <textarea id="userscript-code-display" class="code-display" readonly></textarea>
+        </div>
+      </div>
+
+      <!-- Tab 2: Track Intel -->
+      <div class="tab-pane" id="tab-track-intel">
+        <div class="guide-content">
+          <div class="info-card">
+            <h3 id="ui-track-name">Solana Circuit</h3>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-top:10px;">
+              <div class="metric-box">
+                <span class="metric-label">Track Length</span>
+                <span class="metric-value" id="ui-track-length" style="font-size:18px;">-- m</span>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">Apex Count</span>
+                <span class="metric-value" id="ui-apex-count" style="font-size:18px;">-- corners</span>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">Target Apex Speed</span>
+                <span class="metric-value" style="font-size:18px; color:var(--accent-green);">11.2 m/s</span>
+              </div>
+              <div class="metric-box">
+                <span class="metric-label">Optimal Boost Zone</span>
+                <span class="metric-value" style="font-size:18px; color:var(--accent-cyan);">Main Straight</span>
+              </div>
+            </div>
+            <p style="margin-top:14px;">
+              <strong>Strategic Overview:</strong> Race2Win daily tracks reward drivers who maximize corner exit speed. Because top speed is reached very quickly in Formula A, time is won or lost entirely in the acceleration phase out of the slowest turn. Fire your KERS boost immediately upon apex clipping when pointing straight toward the main straightaway.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Physics Secrets -->
+      <div class="tab-pane" id="tab-physics-secrets">
+        <div class="guide-content">
+          <div class="info-card">
+            <h3>1. The Quadratic Steering Scrub Penalty (<span class="formula-tag">xU · u²</span>)</h3>
+            <p>
+              In the Race2Win game engine (<span class="formula-tag">GameView.js</span> / <span class="formula-tag">eW.integrate</span>), lateral grip is strictly capped at <span class="formula-tag">latGrip = 24.0 m/s²</span> for Formula A. When you turn the wheel harder than the centripetal grip limit (<span class="formula-tag">ω > latGrip / v</span>), the engine does NOT turn the car tighter. Instead, it calculates the excess demand as a scrub factor <span class="formula-tag">u</span> and bleeds your velocity:
+            </p>
+            <p style="margin:8px 0; font-family:monospace; color:var(--accent-amber);">
+              v_new = max(0, v - (xU * u² + i) * dt)
+            </p>
+            <p>
+              Tapping arrow keys repeatedly triggers sudden spikes in <span class="formula-tag">u²</span>, shedding up to 1.5 - 2.5 seconds per lap. The secret to the perfect lap is smooth, minimum-angle steering that stays right at <span class="formula-tag">95%</span> of the grip limit without crossing into the scrub zone.
+            </p>
+          </div>
+
+          <div class="info-card">
+            <h3>2. The Hidden Keyboard "Auto-Gas-Cut" Penalty</h3>
+            <p>
+              By default, Race2Win applies an input assist profile to keyboard players (<span class="formula-tag">or.keyboard</span>):
+            </p>
+            <p style="margin:8px 0; font-family:monospace; color:var(--accent-cyan);">
+              if (autoGasCut && slip > 0.15 && throttle > 0.4) { throttle = 0.40; }
+            </p>
+            <p>
+              If your rear tires slip by even 15% during a corner, the game automatically slashes your throttle to 40%! Gamepad players do not have this restriction. You can avoid this by either turning <strong>Drift Assist to "Off"</strong> in the in-game settings, or by running our <strong>Apex Pro Userscript</strong> which counteracts the auto-gas cut.
+            </p>
+          </div>
+
+          <div class="info-card">
+            <h3>3. Authoritative 60Hz Physics Re-Simulation</h3>
+            <p>
+              Race2Win does not accept arbitrary claimed lap times from the browser. At the end of every official lap attempt, the client base64-encodes the tick-by-tick binary input stream (<span class="formula-tag">steer</span>, <span class="formula-tag">throttle</span>, <span class="formula-tag">brake</span>, <span class="formula-tag">boost</span>) and streams it to <span class="formula-tag">POST /api/attempts/:id/submit</span>.
+            </p>
+            <p>
+              A worker thread on the server re-runs the physics simulation from tick 0 to tick N. Only laps whose inputs produce a valid trajectory without cutting track boundaries are verified and placed onto the USDC payout leaderboard. This is why a precision physics-based autopilot or optimal racing line assistant is the only legitimate and working way to achieve the fastest lap.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Script initialization -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
