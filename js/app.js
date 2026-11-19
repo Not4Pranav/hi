@@ -291,6 +291,10 @@ class ApexProApp {
         if (!this.bestLapTime || this.lastLapTime < this.bestLapTime) {
           this.bestLapTime = this.lastLapTime;
         }
+        // Record final S3 split
+        if (this.sectorTimes[0] !== null && this.sectorTimes[1] !== null) {
+          this.sectorTimes[2] = Math.max(0, this.lastLapTime - (this.sectorTimes[0] + this.sectorTimes[1]));
+        }
       }
       this.hasCrossedStart = true;
       this.lapStartTime = performance.now();
@@ -321,7 +325,9 @@ class ApexProApp {
     const ctx = this.ctx;
     const w = this.canvas.parentElement.clientWidth;
     const h = this.canvas.parentElement.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
 
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
     // Save context for camera transformation
@@ -651,6 +657,20 @@ class ApexProApp {
       document.getElementById('ui-best-lap').innerText = `${this.bestLapTime.toFixed(3)}s`;
     }
 
+    // Sector Splits
+    for (let s = 0; s < 3; s++) {
+      const sIdx = s + 1;
+      const time = this.sectorTimes[s];
+      const el = document.getElementById(`ui-s${sIdx}-time`);
+      const box = document.getElementById(`ui-sector-box-${sIdx}`);
+      if (el && time !== null) {
+        el.innerText = `${time.toFixed(3)}s`;
+        if (box && !box.classList.contains('sector-pb')) {
+          box.classList.add('sector-pb');
+        }
+      }
+    }
+
     // Delta vs Theoretical Optimal
     if (this.hasCrossedStart && this.racingLineData) {
       const theoTotal = this.racingLineData.theoreticalLapTime;
@@ -660,8 +680,8 @@ class ApexProApp {
       const deltaEl = document.getElementById('ui-lap-delta');
       if (deltaEl) {
         const sign = delta >= 0 ? '+' : '';
-        deltaEl.innerText = `${sign}${delta.toFixed(3)}s`;
-        deltaEl.style.color = delta <= 0.05 ? '#00ff66' : '#ff3344';
+        deltaEl.innerText = `${sign}${delta.toFixed(3)}s vs Theo`;
+        deltaEl.style.color = delta <= 0.2 ? '#00ff66' : '#ff3344';
       }
     }
   }
