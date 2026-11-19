@@ -1,5 +1,5 @@
 /**
- * Race2Win Autonomous Perfect-Lap Driver (Stanley + Pure Pursuit + Dynamic Speed Governor)
+ * Race2Win Autonomous Perfect-Lap Driver (Stanley + Pure Pursuit + Lookahead Braking Governor)
  * Executes frame-perfect steering and throttle to achieve the mathematical minimum lap time.
  */
 
@@ -20,15 +20,15 @@ export class AutopilotController {
    */
   computeControls(car) {
     if (!this.linePoints || this.n === 0) {
-      return { steer: 0, throttle: 1, brake: 0, boost: false };
+      return { steer: 0, throttle: 1, brake: 0, boost: false, targetSpeed: 0, targetIdx: 0 };
     }
 
     const v = Math.max(0.1, car.speed);
 
-    // 1. Find nearest point on the optimal racing line
+    // 1. Find nearest point on the optimal racing line (local window search)
     let closestIdx = this.lastClosestIdx;
     let minDistSq = Infinity;
-    const window = 40;
+    const window = 50;
 
     for (let offset = -window; offset <= window; offset++) {
       const idx = (this.lastClosestIdx + offset + this.n) % this.n;
@@ -43,79 +43,94 @@ export class AutopilotController {
     }
     this.lastClosestIdx = closestIdx;
 
-    // 2. Dynamic lookahead point based on speed
-    // Higher speed requires looking further down the track
-    const lookaheadDist = Math.max(1.8, 0.24 * v);
+    // 2. Dynamic lookahead point based on speed (Pure Pursuit preview)
+    const lookaheadDist = Math.max(1.8, 0.22 * v);
     let targetIdx = closestIdx;
     let accumDist = 0;
 
     while (accumDist < lookaheadDist) {
       const nextIdx = (targetIdx + 1) % this.n;
-      const p1 = this.linePoints[targetIdx];
-      const p2 = this.linePoints[nextIdx];
-      accumDist += Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      accumDist += Math.hypot(
+        this.linePoints[nextIdx].x - this.linePoints[targetIdx].x,
+        this.linePoints[nextIdx].y - this.linePoints[targetIdx].y
+      );
       targetIdx = nextIdx;
     }
 
     const targetPt = this.linePoints[targetIdx];
+    const closestPt = this.linePoints[closestIdx];
 
-    // 3. Heading & Cross-Track Error (Stanley Formulation)
+    // 3. Lateral Dynamics: Feedforward curvature + Stanley/Pure-Pursuit feedback
+    // Feedforward: yaw rate needed to sustain upcoming trajectory curvature
+    const feedforwardYaw = v * targetPt.curvature;
+
+    // Cross-track error relative to closest point on optimal line
+    const lineHeading = closestPt.heading;
+    const dx = car.x - closestPt.x;
+    const dy = car.y - closestPt.y;
+    // Cross track error (+ left of line, - right of line)
+    const crossTrack = -Math.sin(lineHeading) * dx + Math.cos(lineHeading) * dy;
+
+    // Heading error to preview point
     const targetAngle = Math.atan2(targetPt.y - car.y, targetPt.x - car.x);
     let headingErr = targetAngle - car.heading;
     while (headingErr > Math.PI) headingErr -= Math.PI * 2;
     while (headingErr < -Math.PI) headingErr += Math.PI * 2;
 
-    // Cross-track error (perpendicular distance to target trajectory)
-    const lineHeading = targetPt.heading;
-    const dx = car.x - targetPt.x;
-    const dy = car.y - targetPt.y;
-    // Cross track error sign (+ left, - right)
-    const crossTrack = -Math.sin(lineHeading) * dx + Math.cos(lineHeading) * dy;
+    // Combined desired angular velocity
+    const desiredYawRate = feedforwardYaw + 3.2 * headingErr - 2.0 * crossTrack;
 
-    // Stanley control law: delta = headingErr + atan(k * crossTrack / v)
-    const kCross = 1.8;
-    const stanleyAngle = headingErr + Math.atan2(kCross * crossTrack, v + 0.5);
+    // Normalize to [-1, 1] steer input using physical yaw authority
+    const effectiveLatGrip = car.spec.latGrip;
+    const effectiveMaxYaw = Math.min(car.spec.maxSteerRate, effectiveLatGrip / v);
+    let desiredSteer = Math.max(-1.0, Math.min(1.0, desiredYawRate / Math.max(0.1, effectiveMaxYaw)));
 
-    // Normalize to [-1, 1] for car steer input
-    const maxSteerRad = car.spec.maxSteerRate;
-    let desiredSteer = stanleyAngle / maxSteerRad;
+    // 4. Longitudinal Control: Proactive Lookahead Braking Governor
+    // Look ahead to detect upcoming braking points before entering the corner
+    let brakeTargetIdx = closestIdx;
+    let brakeDist = 0;
+    const brakeLookaheadDist = Math.max(2.8, 0.40 * v);
+    let minFutureTargetSpeed = closestPt.targetSpeed;
 
-    // Scrub Prevention Guard:
-    // If steering demand exceeds lateral grip, clamp steer to avoid the quadratic speed bleed
-    const maxGripSteer = (car.gripLimit / (v * v + 0.1)) * (maxSteerRad * 0.95);
-    if (Math.abs(desiredSteer) > maxGripSteer) {
-      desiredSteer = Math.sign(desiredSteer) * Math.min(1.0, maxGripSteer);
+    while (brakeDist < brakeLookaheadDist) {
+      const nextIdx = (brakeTargetIdx + 1) % this.n;
+      brakeDist += Math.hypot(
+        this.linePoints[nextIdx].x - this.linePoints[brakeTargetIdx].x,
+        this.linePoints[nextIdx].y - this.linePoints[brakeTargetIdx].y
+      );
+      brakeTargetIdx = nextIdx;
+      if (this.linePoints[brakeTargetIdx].targetSpeed < minFutureTargetSpeed) {
+        minFutureTargetSpeed = this.linePoints[brakeTargetIdx].targetSpeed;
+      }
     }
-    desiredSteer = Math.max(-1.0, Math.min(1.0, desiredSteer));
 
-    // 4. Longitudinal Control (Speed Governor)
-    const targetSpeed = targetPt.targetSpeed;
-    const speedDelta = v - targetSpeed;
-
+    const speedDelta = v - minFutureTargetSpeed;
     let throttle = 0;
     let brake = 0;
 
-    if (speedDelta < -0.3) {
+    if (speedDelta > 0.05) {
+      // Over upcoming target speed: threshold braking to apex target
+      throttle = 0.0;
+      brake = Math.min(1.0, speedDelta / 0.35);
+    } else if (speedDelta < -0.15) {
       // Below target speed: 100% full throttle
       throttle = 1.0;
       brake = 0.0;
-    } else if (speedDelta > 0.4) {
-      // Overspeeding approaching corner: threshold braking
-      throttle = 0.0;
-      brake = Math.min(1.0, (speedDelta / 2.0));
     } else {
-      // Balance speed at apex / exit
-      throttle = Math.max(0.2, 1.0 - speedDelta);
+      // At corner speed: maintain balanced momentum
+      throttle = Math.max(0.2, 1.0 - (v / car.spec.topSpeed) * 0.3);
       brake = 0.0;
     }
 
     // 5. Intelligent Boost Triggering
-    // Fire boost when entering the optimal straight and aligned with track
+    // Fire boost when pointed straight down a high-speed acceleration corridor
     let boost = false;
-    const distToBoost = Math.abs(closestIdx - this.optimalBoostIdx);
-    const onLongStraight = targetPt.state === 'accel' && Math.abs(targetPt.curvature) < 0.008 && v > 10.0;
+    const onLongStraight = targetPt.state === 'accel' &&
+      Math.abs(targetPt.curvature) < 0.005 &&
+      Math.abs(closestPt.curvature) < 0.005 &&
+      v > 11.5;
 
-    if ((distToBoost <= 3 || onLongStraight) && Math.abs(headingErr) < 0.15 && car.boost.charge >= 0.98) {
+    if (onLongStraight && Math.abs(headingErr) < 0.06 && car.boost.charge >= 0.98) {
       boost = true;
     }
 
@@ -124,7 +139,7 @@ export class AutopilotController {
       throttle,
       brake,
       boost,
-      targetSpeed: Math.round(targetSpeed * 3.6 * 10) / 10,
+      targetSpeed: Math.round(minFutureTargetSpeed * 3.6 * 10) / 10,
       targetIdx
     };
   }
