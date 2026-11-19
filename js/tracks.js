@@ -235,3 +235,62 @@ export function buildTrack(trackDef) {
     }
   };
 }
+
+/**
+ * Parses user-provided track definitions (JSON string, single-quote array, or CSV format)
+ */
+export function parseCustomTrack(input, name = 'Custom Circuit') {
+  let items = [];
+  let width = 3.4;
+
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (trimmed.startsWith('{')) {
+      try {
+        const obj = JSON.parse(trimmed);
+        items = obj.items || [];
+        width = obj.width || 3.4;
+        name = obj.name || name;
+      } catch (e) {}
+    } else if (trimmed.startsWith('[')) {
+      try {
+        items = JSON.parse(trimmed);
+      } catch (e) {
+        const content = trimmed.slice(1, -1);
+        items = content.split(',').map(s => {
+          s = s.trim().replace(/^['"]|['"]$/g, '');
+          const num = parseFloat(s);
+          return isNaN(num) ? s : num;
+        });
+      }
+    } else {
+      items = trimmed.split(',').map(s => {
+        s = s.trim().replace(/^['"]|['"]$/g, '');
+        const num = parseFloat(s);
+        return isNaN(num) ? s : num;
+      });
+    }
+  } else if (Array.isArray(input)) {
+    items = input;
+  } else if (typeof input === 'object' && input !== null) {
+    items = input.items || [];
+    width = input.width || 3.4;
+    name = input.name || name;
+  }
+
+  items = items.filter(it => typeof it === 'number' || (typeof it === 'string' && it.length > 0));
+
+  if (items.length < 3) {
+    throw new Error('Track must contain at least 3 segments (straights or corners).');
+  }
+
+  return {
+    id: 'custom-circuit',
+    name,
+    theme: 'meadow',
+    blurb: 'Custom user-imported circuit from Race2Win.',
+    family: 'custom',
+    width,
+    items
+  };
+}
