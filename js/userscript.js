@@ -106,7 +106,14 @@ export const USERSCRIPT_CODE = `// ==UserScript==
         </label>
       </div>
 
-      <div style="font-size:10px; color:#64748b; margin-top:10px; text-align:center; line-height:1.4;">
+      <!-- Action Buttons -->
+      <div style="margin-top:10px; display:flex; gap:6px;">
+        <button id="apex-btn-export-track" style="flex:1; background:#1e293b; border:1px solid #334155; color:#00f0ff; border-radius:4px; padding:6px; font-weight:700; font-size:11px; cursor:pointer;">
+          📥 Export Track to Apex Pro
+        </button>
+      </div>
+
+      <div style="font-size:10px; color:#64748b; margin-top:8px; text-align:center; line-height:1.4;">
         Keys: <span style="color:#cbd5e1;">[Ctrl+Shift+A]</span> Autopilot &bull; <span style="color:#cbd5e1;">[H]</span> Toggle HUD
       </div>
     </div>
@@ -166,6 +173,26 @@ export const USERSCRIPT_CODE = `// ==UserScript==
     const isMin = body.style.display === 'none';
     body.style.display = isMin ? 'block' : 'none';
     document.getElementById('apex-hud-minimize').innerText = isMin ? '–' : '+';
+  });
+
+  // Export current track from in-game memory to Apex Pro Suite
+  document.getElementById('apex-btn-export-track')?.addEventListener('click', () => {
+    let trackItems = null;
+    if (window.track && window.track.items) trackItems = window.track.items;
+    else if (window.__r2w_track) trackItems = window.__r2w_track;
+    else if (window.game && window.game.track) trackItems = window.game.track.items;
+
+    const btn = document.getElementById('apex-btn-export-track');
+    if (trackItems) {
+      const trackStr = JSON.stringify(trackItems);
+      navigator.clipboard?.writeText(trackStr);
+      btn.innerText = 'Track Copied! Opening...';
+      window.open('https://antigravity.luch.dev/site/00cf04b7-1e13-4a12-8ad8-5128117fd38d/63246d3c87e74c97f97f0717/#custom=' + encodeURIComponent(trackStr), '_blank');
+      setTimeout(() => { btn.innerText = '📥 Export Track to Apex Pro'; }, 2500);
+    } else {
+      btn.innerText = 'Start race to grab track!';
+      setTimeout(() => { btn.innerText = '📥 Export Track to Apex Pro'; }, 2500);
+    }
   });
 
   // Audio Context for Scrub Alert Beep
