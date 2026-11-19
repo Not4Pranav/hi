@@ -1,5 +1,5 @@
 {
-  "planFirst": false,
+  "planFirst": true,
   "effort": "high",
   "runner": "auto",
   "branchPerChat": false
