@@ -6,7 +6,8 @@
 export function optimizeRacingLine(track, carSpec) {
   const points = track.points;
   const n = points.length;
-  const halfW = (track.width / 2) * 0.85; // Stay within 85% of track edge (using kerbs)
+  // Keep the racing line within 75% of half-width so car geometry (1.8m wide) stays securely on-track
+  const halfW = (track.width / 2) * 0.75;
 
   // Step 1: Iterative minimum-curvature line solver
   // alpha[i] is lateral offset from centerline: +left, -right
@@ -17,17 +18,17 @@ export function optimizeRacingLine(track, carSpec) {
     const cur = points[i].curvature;
     if (cur > 0.01) {
       // Right turn -> apex is on inside (right = negative alpha)
-      alpha[i] = -halfW * 0.9;
+      alpha[i] = -halfW * 0.80;
     } else if (cur < -0.01) {
       // Left turn -> apex is on inside (left = positive alpha)
-      alpha[i] = halfW * 0.9;
+      alpha[i] = halfW * 0.80;
     } else {
       alpha[i] = 0;
     }
   }
 
   // Smooth relaxation passes to minimize local curvature (Laplacian smoothing with boundary projection)
-  const iterations = 80;
+  const iterations = 120;
   for (let it = 0; it < iterations; it++) {
     for (let i = 0; i < n; i++) {
       const prev = alpha[(i - 1 + n) % n];
@@ -40,9 +41,8 @@ export function optimizeRacingLine(track, carSpec) {
         const nextCur = points[(i + 4) % n].curvature;
         // As corner unwinds into a straight, track out to the outside
         if (Math.abs(nextCur) < Math.abs(p.curvature)) {
-          // Approaching exit: push to outside
           const outsideSign = p.curvature > 0 ? 1 : -1;
-          smooth += outsideSign * 0.05 * halfW;
+          smooth += outsideSign * 0.03 * halfW;
         }
       }
 
@@ -67,7 +67,7 @@ export function optimizeRacingLine(track, carSpec) {
       curvature: 0,
       heading: 0,
       targetSpeed: 0,
-      state: 'accel' // 'accel', 'brake', 'apex', 'coast'
+      state: 'accel' // 'accel', 'brake', 'apex'
     });
   }
 
@@ -86,7 +86,7 @@ export function optimizeRacingLine(track, carSpec) {
     const h2 = Math.atan2(dy2, dx2);
     curr.heading = h2;
 
-    const ds = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+    const ds = Math.hypot(dx2, dy2);
     let dh = h2 - h1;
     while (dh > Math.PI) dh -= Math.PI * 2;
     while (dh < -Math.PI) dh += Math.PI * 2;
@@ -95,33 +95,38 @@ export function optimizeRacingLine(track, carSpec) {
   }
 
   // Step 3: Forward-Backward Velocity Profile (Dynamic Programming)
-  const latGrip = carSpec.latGrip;
+  // Use 75% grip safety margin to operate right below the quadratic scrub bleed threshold (xU * u^2)
+  const latGrip = carSpec.latGrip * 0.75;
   const topSpeed = carSpec.topSpeed;
   const brakeDecel = carSpec.brakeDecel;
   const launchAccel = carSpec.launchAccel;
 
-  // Pass 3a: Maximum cornering speed at every node (Centripetal grip limit)
+  // Pass 3a: Maximum cornering speed at every node (Centripetal grip limit + Chicane transition penalty)
   for (let i = 0; i < n; i++) {
-    const k = Math.abs(linePoints[i].curvature);
-    if (k > 0.005) {
-      // v = sqrt(latGrip / k)
-      linePoints[i].targetSpeed = Math.min(topSpeed, Math.sqrt(latGrip / k));
+    const prev = linePoints[(i - 1 + n) % n];
+    const curr = linePoints[i];
+    const next = linePoints[(i + 1) % n];
+    const k = Math.abs(curr.curvature);
+    const dK = Math.abs(next.curvature - prev.curvature);
+    // Penalize rapid steering reversals (chicanes/esses) due to steerResponse lag
+    const effK = k + 0.6 * dK;
+
+    if (effK > 0.005) {
+      curr.targetSpeed = Math.min(topSpeed, Math.sqrt(latGrip / effK));
     } else {
-      linePoints[i].targetSpeed = topSpeed;
+      curr.targetSpeed = topSpeed;
     }
   }
 
-  // Pass 3b: Backward Pass (Braking zones)
-  for (let pass = 0; pass < 2; pass++) {
+  // Pass 3b: Backward Pass (Braking zones with safety margin)
+  for (let pass = 0; pass < 3; pass++) {
     for (let i = n - 1; i >= 0; i--) {
       const curr = linePoints[i];
       const next = linePoints[(i + 1) % n];
-      const dx = next.x - curr.x;
-      const dy = next.y - curr.y;
-      const ds = Math.sqrt(dx * dx + dy * dy);
+      const ds = Math.hypot(next.x - curr.x, next.y - curr.y);
 
       // v_curr^2 <= v_next^2 + 2 * a_brake * ds
-      const maxEntrySpeed = Math.sqrt(next.targetSpeed * next.targetSpeed + 2 * brakeDecel * ds);
+      const maxEntrySpeed = Math.sqrt(next.targetSpeed * next.targetSpeed + 2 * (brakeDecel * 0.88) * ds);
       if (curr.targetSpeed > maxEntrySpeed) {
         curr.targetSpeed = maxEntrySpeed;
         curr.state = 'brake';
@@ -129,14 +134,12 @@ export function optimizeRacingLine(track, carSpec) {
     }
   }
 
-  // Pass 3c: Forward Pass (Acceleration out of corners)
-  for (let pass = 0; pass < 2; pass++) {
+  // Pass 3c: Forward Pass (Acceleration out of corners with engine power curve)
+  for (let pass = 0; pass < 3; pass++) {
     for (let i = 0; i < n; i++) {
       const prev = linePoints[(i - 1 + n) % n];
       const curr = linePoints[i];
-      const dx = curr.x - prev.x;
-      const dy = curr.y - prev.y;
-      const ds = Math.sqrt(dx * dx + dy * dy);
+      const ds = Math.hypot(curr.x - prev.x, curr.y - prev.y);
 
       // Tapered acceleration based on current speed
       const speedRatio = prev.targetSpeed / topSpeed;
@@ -163,7 +166,7 @@ export function optimizeRacingLine(track, carSpec) {
   for (let i = 0; i < n * 2; i++) {
     const idx = i % n;
     const p = linePoints[idx];
-    if (Math.abs(p.curvature) < 0.015) {
+    if (Math.abs(p.curvature) < 0.012) {
       if (currStraightLen === 0) straightStartIdx = idx;
       currStraightLen++;
       if (currStraightLen > maxStraightLen) {
